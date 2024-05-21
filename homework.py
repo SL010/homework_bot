@@ -47,7 +47,7 @@ def get_api_answer(timestamp):
     except requests.RequestException as error:
         logging.error(f'Сбой в работе программы: {error}')
     if homework.status_code != 200:
-        logging.error(f'Сбой в работе программы: {error}')
+        raise Exception
     return homework.json()
 
 
