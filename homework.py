@@ -1,13 +1,13 @@
-import sys
 import logging
 import os
-import requests
+import sys
 import time
-from dotenv import load_dotenv
-from http import HTTPStatus
-from logging import StreamHandler
-
 from contextlib import suppress
+from http import HTTPStatus
+# from logging import StreamHandler
+
+import requests
+from dotenv import load_dotenv
 from telebot import TeleBot, apihelper
 
 load_dotenv()
@@ -33,11 +33,12 @@ def check_tokens():
     tokens = ('PRACTICUM_TOKEN', 'TELEGRAM_CHAT_ID', 'TELEGRAM_TOKEN')
     missing_tokens = [
         token for token in tokens
-        if globals()[token] is None or globals()[token] == ''
+        if not globals()[token]
     ]
+    message_error = f'Отсутствуют ключи доступа {missing_tokens}'
     if len(missing_tokens) != 0:
-        logging.critical('Осутствуют ключи доступа')
-        sys.exit('Осутствуют ключи доступа')
+        logging.critical(message_error)
+        sys.exit(message_error)
 
 
 def send_message(bot, message):
@@ -52,25 +53,26 @@ def get_api_answer(timestamp):
     try:
         homework = requests.get(ENDPOINT, headers=HEADERS, params=payload)
     except requests.RequestException as error:
-        raise ValueError(f'Возникла ошибка при выполнении запроса: {error}')
+        raise ConnectionError(
+            f'Возникла ошибка при выполнении запроса: {error}'
+        )
     if homework.status_code != HTTPStatus.OK:
-        raise ValueError('Ошибка ответа сервера')
+        raise ValueError(f'Ошибка ответа сервера {homework.status_code}')
     return homework.json()
 
 
 def check_response(response):
     """Проверка ответа API на соответствие документации."""
     if not isinstance(response, dict):
-        raise TypeError('Получен неожиданный тип данных в ответе API')
+        raise TypeError(
+            f'Получен неожиданный тип данных в ответе API {type(response)}'
+        )
     if 'homeworks' not in response:
         raise KeyError('Отсутствует ключ "homeworks" в словаре ответа API')
 
     if not isinstance(response['homeworks'], list):
-        raise TypeError('Получен неожиданный'
-                        'тип данных при запросе списка домашних работ')
-
-    if len(response['homeworks']) == 0:
-        logging.debug('Отсутствие изменение статуса')
+        raise TypeError('Получен неожиданный тип данных при запросе'
+                        'списка домашних работ')
 
 
 def parse_status(homework):
@@ -91,15 +93,15 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    logger = logging.getLogger(__name__)
+    # logger = logging.getLogger(__name__)
     # file_handler = logging.FileHandler('log_file.log')
     # formatter = logging.Formatter('%(asctime)s - %(name)s -
     # %(levelname)s - %(message)s')
     # file_handler.setFormatter(formatter)
-    logger.setLevel(logging.DEBUG)
-    stream_handler = StreamHandler()
-    logger.addHandler(stream_handler)
-    logger.handlers[0].stream = sys.stdout
+    # logger.setLevel(logging.DEBUG)
+    # stream_handler = StreamHandler()
+    # logger.addHandler(stream_handler)
+    # logger.handlers[0].stream = sys.stdout
 
     check_tokens()
     # Создаем объект класса бота
@@ -112,23 +114,24 @@ def main():
             response = get_api_answer(timestamp)
             check_response(response)
             homework = response['homeworks'][0]
-            if len(homework) != 0:
-                new_status = parse_status(homework)
-            else:
+            if not homework:
                 logging.debug('Отсутствует изменение статуса')
+                continue
+            new_status = parse_status(homework)
             if new_status != previos_message:
                 send_message(bot, new_status)
                 previos_message = new_status
                 timestamp = response.get('current_date', timestamp)
             else:
-                logging.DEBUG('Статус не изменился, сообщение не отправлено')
+                logging.debug('Статус не изменился, сообщение не отправлено')
         except apihelper.ApiException as error:
-            logging.error(f'Сбой отправки сообщения: {error}')
+            logging.error(f'Сбой отправки сообщения: {error}', exc_info=True)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logging.error(f'Сбой в работе программы: {error}', exc_info=True)
             with suppress(apihelper.ApiException):
-                send_message(bot, message)
+                with suppress(apihelper.ApiException):
+                    send_message(bot, message)
         finally:
             time.sleep(RETRY_PERIOD)
 
@@ -137,5 +140,9 @@ if __name__ == '__main__':
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         level=logging.DEBUG,
+        handlers=[
+            logging.FileHandler("log_file.log"),
+            logging.StreamHandler(sys.stdout)
+        ]
     )
     main()
