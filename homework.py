@@ -4,7 +4,6 @@ import sys
 import time
 from contextlib import suppress
 from http import HTTPStatus
-# from logging import StreamHandler
 
 import requests
 from dotenv import load_dotenv
@@ -35,8 +34,9 @@ def check_tokens():
         token for token in tokens
         if not globals()[token]
     ]
-    message_error = f'Отсутствуют ключи доступа {missing_tokens}'
-    if len(missing_tokens) != 0:
+    missing_tokens_str = ' '.join(missing_tokens)
+    message_error = f'Отсутствуют ключи доступа {missing_tokens_str}'
+    if missing_tokens:
         logging.critical(message_error)
         sys.exit(message_error)
 
@@ -93,21 +93,10 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    # logger = logging.getLogger(__name__)
-    # file_handler = logging.FileHandler('log_file.log')
-    # formatter = logging.Formatter('%(asctime)s - %(name)s -
-    # %(levelname)s - %(message)s')
-    # file_handler.setFormatter(formatter)
-    # logger.setLevel(logging.DEBUG)
-    # stream_handler = StreamHandler()
-    # logger.addHandler(stream_handler)
-    # logger.handlers[0].stream = sys.stdout
-
     check_tokens()
     # Создаем объект класса бота
     bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-    # timestamp = 1549962000
     previos_message = ''
     while True:
         try:
@@ -130,7 +119,8 @@ def main():
             message = f'Сбой в работе программы: {error}'
             logging.error(f'Сбой в работе программы: {error}', exc_info=True)
             with suppress(apihelper.ApiException):
-                with suppress(apihelper.ApiException):
+                if previos_message != message:
+                    previos_message = message
                     send_message(bot, message)
         finally:
             time.sleep(RETRY_PERIOD)
